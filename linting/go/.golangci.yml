@@ -1,0 +1,88 @@
+version: "2"
+
+linters:
+  enable:
+    - err113
+    - forbidigo
+    - gocritic
+    - unparam
+    - wrapcheck
+    - dupl
+    - errname
+    - funlen
+    - gochecknoglobals
+    - gocyclo
+    - gocognit
+    - gosec
+    - gosmopolitan
+    - govet
+    - iface
+    - goconst
+    - godoclint
+    - nilnil
+    - nilerr
+    - nlreturn
+    - paralleltest
+    - modernize
+    - nestif
+    - whitespace
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: "^panic$"
+          msg: "panic() is forbidden — return errors or log fatal error if at top level instead"
+        - pattern: "^fmt\\.Print.*$"
+          msg: "fmt.Print* is forbidden — use structured logging (zap) instead"
+        - pattern: "^log\\..*$"
+          msg: "stdlib log is forbidden — use structured logging (zap) instead"
+        - pattern: "^os\\.Exit$"
+          msg: "os.Exit is forbidden outside main — return errors instead"
+      exclude-godoc-examples: true
+      analyze-types: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+    wrapcheck:
+      ignore-sigs:
+        - .Errorf(
+        - errors.New(
+        - errors.Unwrap(
+        - .Wrap(
+        - .Wrapf(
+      ignore-package-globs:
+        - encoding/*
+        - github.com/ggarcia209/abacaxi-backend/*
+    gocyclo:
+      min-complexity: 15
+    gocognit:
+      min-complexity: 15
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - forbidigo
+          - wrapcheck
+          - err113
+          - errname
+          - funlen
+          - gosec
+      - path: main\.go$
+        linters:
+          - funlen
+      - path: scripts/
+        linters:
+          - forbidigo
+          - wrapcheck
+          - err113
+      # Allow log.* in main.go files
+      - path: main\.go$
+        text: "log\\."
+        linters:
+          - forbidigo
+      # Allow os.Exit in main.go files
+      - path: main\.go$
+        text: "os\\.Exit"
+        linters:
+          - forbidigo
