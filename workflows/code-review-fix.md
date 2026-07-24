@@ -20,9 +20,7 @@ This workflow addresses comments on GitHub PR requests under code review, makes 
 - You must not proceed if the workflow encounters a critical failure that can't be resolved (ex: authentication failures, bad gateway errors).
 - You must execute all code in the Docker devcontainer.
 - You must create a new commit for each change; do not ammend previous commits.
-- Each fix or change must have it's own commit that will be referenced in each response to each comment. Do not push everything in one commit.
 - Leave the JIRA ticket in "Code Review" status.
-- Each PR comment must have a response.
 
 ## Step 1: Review PR Comments
 
@@ -32,10 +30,9 @@ This workflow addresses comments on GitHub PR requests under code review, makes 
 ## Step 2: Address PR Comments
 
 - Develop an implementation plan for the proposed / required code changes.
-- Make necessary changes, with 1 commit per change.
-- Push to PR when all changes have been implemented.
+- Make necessary changes, then commit and push to PR.
 - If any proposed changes are not appropriate or incorrect, leave comment explaining why the the change should not be made. Provide an alternative solution if necessary.
-- Add response to each comment explaining fix with commit reference, or justification for why no change was made.
+- Add response to comments if appropriate.
 
 ## Step 3: Verify
 
