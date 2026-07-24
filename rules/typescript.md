@@ -2,7 +2,7 @@
 trigger: always_on
 ---
 
-# Golang (Go) Development Rules
+# TypeScript Development Rules
 
 Rules for development with the Typescript Programming Language.
 
