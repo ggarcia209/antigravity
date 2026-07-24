@@ -53,7 +53,7 @@ linters:
         - .Wrapf(
       ignore-package-globs:
         - encoding/*
-        - github.com/ggarcia209/abacaxi-backend/*
+        - ${PROJECT_MODULE_PATH}/*
     gocyclo:
       min-complexity: 15
     gocognit:

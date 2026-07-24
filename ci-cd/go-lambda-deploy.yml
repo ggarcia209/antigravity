@@ -1,0 +1,407 @@
+# ===========================================================================
+# CI/CD Pipeline — Go Backend to AWS ECR + Lambda
+#
+# Path-based change detection runs only relevant jobs.
+# Handles security scans, lint, test, build, Docker push, and
+# multi-environment deployment (dev/staging/prod) with semantic release.
+# ===========================================================================
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Security Gates — block all downstream jobs if either fails
+  # ---------------------------------------------------------------------------
+  trivy-scan:
+    name: Security Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          scan-type: "fs"
+          format: "table"
+          trivy-config: "trivy.yaml"
+
+  semgrep:
+    name: Semgrep Security Scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.82.0@sha256:992bc2da9efba650f90db4a26f1ee4c9cae8db655e42cb7db3b41084c99bb98a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run Semgrep CI
+        run: semgrep scan --config ${SEMGREP_CONFIG_PATH} --error ${SEMGREP_SCAN_PATH}
+
+  # ---------------------------------------------------------------------------
+  # Step 1: Detect which paths changed (gated by security scans)
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    name: Detect Changes
+    needs: [trivy-scan, semgrep]
+    runs-on: ubuntu-latest
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      shared: ${{ steps.filter.outputs.shared }}
+      docker: ${{ steps.filter.outputs.docker }}
+      ci-config: ${{ steps.filter.outputs.ci-config }}
+      docs-only: ${{ steps.filter.outputs.docs-only }}
+      image-tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3
+        id: filter
+        with:
+          # Customize these path filters for your project structure:
+          filters: |
+            go:
+              - 'services/**'
+              - 'cmd/**'
+              - 'internal/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+            shared:
+              - 'proto/**'
+              - 'models/**'
+              - 'api/**'
+              - 'Makefile'
+            docker:
+              - '${DOCKERFILE_PATH}'
+              - 'docker-compose.yml'
+              - '.dockerignore'
+            ci-config:
+              - '.github/workflows/**'
+            docs-only:
+              - 'docs/**'
+              - '.agent/**'
+              - '*.md'
+
+      - name: Generate Tag
+        id: tag
+        run: |
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "tag=${SAFE_BRANCH_NAME}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
+  # Step 2a: Go Lint
+  # ---------------------------------------------------------------------------
+  go-lint:
+    name: Go Lint
+    needs: detect-changes
+    if: needs.detect-changes.outputs.go == 'true' || needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '${GO_VERSION}'
+          cache: true
+
+      - name: GolangCI-Lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          version: latest
+
+  # ---------------------------------------------------------------------------
+  # Step 2b: Go Test
+  # ---------------------------------------------------------------------------
+  go-test:
+    name: Go Test
+    needs: [detect-changes, go-lint]
+    if: needs.detect-changes.outputs.go == 'true' || needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '${GO_VERSION}'
+          cache: true
+
+      - name: Test
+        run: go test -v -race -cover ./...
+
+  # ---------------------------------------------------------------------------
+  # Step 2c: Go Build
+  # ---------------------------------------------------------------------------
+  go-build:
+    name: Go Build
+    needs: [detect-changes, go-test]
+    if: needs.detect-changes.outputs.go == 'true' || needs.detect-changes.outputs.shared == 'true' || needs.detect-changes.outputs.ci-config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '${GO_VERSION}'
+          cache: true
+
+      - name: Build
+        run: go build -v ./...
+
+  # ---------------------------------------------------------------------------
+  # Step 3: Docker Build + Push to Dev ECR
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker Build
+    needs: [detect-changes, go-lint, go-test, go-build]
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      (
+        needs.detect-changes.outputs.go == 'true' ||
+        needs.detect-changes.outputs.shared == 'true' ||
+        needs.detect-changes.outputs.docker == 'true' ||
+        needs.detect-changes.outputs.ci-config == 'true'
+      )
+    runs-on: ubuntu-24.04-arm
+    environment: dev
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - service: ${SERVICE_NAME}
+            ecr_repo_dev: ${ECR_REPO_DEV}
+            ecr_repo_release: ${ECR_REPO_RELEASE}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ${DOCKERFILE_PATH}
+          push: true
+          provenance: false
+          build-args: SERVICE=${{ matrix.service }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ matrix.ecr_repo_dev }}:${{ needs.detect-changes.outputs.image-tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ matrix.ecr_repo_dev }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  # ---------------------------------------------------------------------------
+  # Step 4: Deploy to Dev
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy to Dev (${{ matrix.service }})
+    needs: [docker, detect-changes]
+    if: github.ref != 'refs/heads/main'
+    environment: dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - service: ${SERVICE_NAME}
+            ecr_repo_dev: ${ECR_REPO_DEV}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update Lambda Code
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          make ${MAKE_LAMBDA_UPDATE_TARGET}-${{ matrix.service }} \
+            AWS_REGION=${{ vars.AWS_REGION }} \
+            PROJECT=${{ vars.PROJECT }} \
+            ENV=dev \
+            TAG=${{ needs.detect-changes.outputs.image-tag }} \
+            AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID \
+            ECR_REPO=${{ matrix.ecr_repo_dev }}
+
+  # ---------------------------------------------------------------------------
+  # Step 5: Semantic Release (main only)
+  # ---------------------------------------------------------------------------
+  release:
+    name: Semantic Release
+    needs: [detect-changes, go-lint, go-test, go-build, docker]
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled') &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '${NODE_VERSION}'
+
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Step 6a: Tag Release Image (main only, after release)
+  # ---------------------------------------------------------------------------
+  tag-release:
+    name: Tag Release Image
+    needs: [release, detect-changes]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      needs.release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-24.04-arm
+    environment: stg
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - service: ${SERVICE_NAME}
+            ecr_repo_dev: ${ECR_REPO_DEV}
+            ecr_repo_release: ${ECR_REPO_RELEASE}
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
+
+      - name: Tag and Push Release Images
+        run: |
+          REGISTRY=${{ steps.login-ecr.outputs.registry }}
+          DEV_IMAGE=$REGISTRY/${{ matrix.ecr_repo_dev }}
+          RELEASE_IMAGE=$REGISTRY/${{ matrix.ecr_repo_release }}
+          DEV_TAG=${{ needs.detect-changes.outputs.image-tag }}
+          RELEASE_TAG=${{ needs.release.outputs.new_release_version }}
+
+          docker pull "$DEV_IMAGE:$DEV_TAG"
+          docker tag "$DEV_IMAGE:$DEV_TAG" "$RELEASE_IMAGE:$RELEASE_TAG"
+          docker tag "$DEV_IMAGE:$DEV_TAG" "$RELEASE_IMAGE:latest"
+          docker push "$RELEASE_IMAGE:$RELEASE_TAG"
+          docker push "$RELEASE_IMAGE:latest"
+
+  # ---------------------------------------------------------------------------
+  # Step 6b: Deploy to Staging
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy to Staging (${{ matrix.service }})
+    needs: [tag-release, release]
+    environment: stg
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - service: ${SERVICE_NAME}
+            ecr_repo_release: ${ECR_REPO_RELEASE}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update Lambda Code
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          make ${MAKE_LAMBDA_UPDATE_TARGET}-${{ matrix.service }} \
+            AWS_REGION=${{ vars.AWS_REGION }} \
+            PROJECT=${{ vars.PROJECT }} \
+            ENV=stg \
+            TAG=${{ needs.release.outputs.new_release_version }} \
+            AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID \
+            ECR_REPO=${{ matrix.ecr_repo_release }}
+
+  # ---------------------------------------------------------------------------
+  # Step 6c: Deploy to Production (requires manual approval)
+  # ---------------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy to Production (${{ matrix.service }})
+    needs: [deploy-staging, release]
+    environment: prod
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      matrix:
+        include:
+          - service: ${SERVICE_NAME}
+            ecr_repo_release: ${ECR_REPO_RELEASE}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Update Lambda Code
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          make ${MAKE_LAMBDA_UPDATE_TARGET}-${{ matrix.service }} \
+            AWS_REGION=${{ vars.AWS_REGION }} \
+            PROJECT=${{ vars.PROJECT }} \
+            ENV=prod \
+            TAG=${{ needs.release.outputs.new_release_version }} \
+            AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID \
+            ECR_REPO=${{ matrix.ecr_repo_release }}

@@ -1,0 +1,18 @@
+# set github username and PAT token with packages:read scope at github.com/settings/tokens
+# set PAT as NODE_AUTH_TOKEN in repo .env
+@${YOUR_GITHUB_USERNAME}}:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+
+# enforces minimum release age of packages to reduce supply chain attacks (2880m / 48h default)
+minimum-release-age=2880
+
+# exclude self-hosted packages from minimum release age
+minimum-release-age-exclude[]=@${YOUR_GITHUB_USERNAME}/${YOUR_GITHUB_PROJECT}
+
+# verifies integrity of installed packages
+verify-store-integrity=true
+
+# prevents malicious scripts from executing on install
+# must run valid postinstall scripts manually when enabled
+# or use pnpm approve-builds
+never-run-scripts=true  

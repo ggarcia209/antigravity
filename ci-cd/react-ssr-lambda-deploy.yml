@@ -1,0 +1,554 @@
+# ===========================================================================
+# CI/CD Pipeline — React SSR to AWS Lambda + S3 + CloudFront
+#
+# Runs security scans, lint, typecheck, and tests on all pushes and PRs.
+# Multi-environment deployment (dev/staging/prod) with semantic release,
+# Docker-based SSR Lambda, S3 static asset sync, and Lambda code update.
+# ===========================================================================
+name: Deploy
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+  packages: read
+
+env:
+  PROJECT: ${{ vars.PROJECT || '${PROJECT_NAME}' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Step 1: CI Checks (Security Scans, Install, Lint, Typecheck, Test)
+  # ---------------------------------------------------------------------------
+  trivy-scan:
+    name: Trivy Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          trivy-config: "trivy.yaml"
+
+  semgrep:
+    name: Semgrep Security Scan
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.82.0@sha256:992bc2da9efba650f90db4a26f1ee4c9cae8db655e42cb7db3b41084c99bb98a
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Run Semgrep CI
+        run: semgrep scan --config ${SEMGREP_CONFIG_PATH} --error ${SEMGREP_SCAN_PATH}
+
+  install-deps:
+    name: Install Dependencies
+    needs: [trivy-scan, semgrep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Cache node modules
+        id: cache-node-modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Install dependencies
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  lint:
+    name: Lint
+    needs: [install-deps, semgrep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Restore node modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies fallback
+        run: pnpm install --frozen-lockfile --prefer-offline
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run lint
+        run: pnpm lint
+
+  typecheck:
+    name: Typecheck
+    needs: [install-deps, semgrep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Restore node modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies fallback
+        run: pnpm install --frozen-lockfile --prefer-offline
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+  test:
+    name: Test
+    needs: [install-deps, semgrep]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Restore node modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies fallback
+        run: pnpm install --frozen-lockfile --prefer-offline
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tests
+        run: pnpm test
+
+  # ---------------------------------------------------------------------------
+  # Step 2: Build Application Assets
+  # Builds SSR bundle and client-side assets, uploads dist/ as artifact.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build Assets
+    needs: [lint, typecheck, test, semgrep]
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Cache node modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies fallback
+        run: pnpm install --frozen-lockfile --prefer-offline
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set Environment Variables
+        # Populate environment-specific variables from GitHub Actions vars/secrets.
+        # Customize the variable names for your project:
+        run: |
+          # Validate required variables
+          # if [ -z "${{ vars.EXAMPLE_REQUIRED_VAR }}" ]; then
+          #   echo "Error: Required variable not set"
+          #   exit 1
+          # fi
+
+          # Set environment variables for the build:
+          # echo "VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}" >> $GITHUB_ENV
+          # echo "VITE_APP_ENV=${{ vars.VITE_APP_ENV || 'dev' }}" >> $GITHUB_ENV
+          echo "Build environment variables configured"
+
+      - name: Build Application
+        run: pnpm build && pnpm build:lambda
+
+      - name: Upload dist/ directory as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dist-artifact
+          path: dist/
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Step 3: Docker Build + Push to Dev ECR
+  # Builds the Lambda container image and pushes to dev ECR repo.
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker Build & Push (Dev ECR)
+    needs: [build, semgrep]
+    runs-on: ubuntu-24.04-arm
+    environment: dev
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download dist/ directory artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist-artifact
+          path: dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
+
+      - name: Generate Tag
+        id: tag
+        run: |
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
+          SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)
+          echo "tag=${SAFE_BRANCH_NAME}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ${DOCKERFILE_PATH}
+          push: true
+          provenance: false
+          secrets: |
+            NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT }}-frontend-ssr-dev:${{ steps.tag.outputs.tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT }}-frontend-ssr-dev:latest
+          cache-from: type=gha,scope=frontend-ssr
+          cache-to: type=gha,mode=max,scope=frontend-ssr
+
+  # ---------------------------------------------------------------------------
+  # Step 4: Deploy to Dev (PRs only)
+  # ---------------------------------------------------------------------------
+  deploy-dev:
+    name: Deploy to Dev
+    needs: [build, docker, semgrep]
+    if: github.event_name == 'pull_request'
+    environment: dev
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download dist/ directory artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: dist-artifact
+          path: dist/
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Deploy static assets to S3
+        run: |
+          S3_BUCKET=$(aws cloudformation list-exports --query "Exports[?Name=='${{ env.PROJECT }}-dev-${CFN_EXPORT_SUFFIX}'].Value" --output text)
+          if [ -z "$S3_BUCKET" ]; then
+            echo "Error: S3_BUCKET could not be resolved from CloudFormation exports"
+            exit 1
+          fi
+          make ${MAKE_S3_SYNC_TARGET} S3_BUCKET=$S3_BUCKET
+
+      - name: Update Lambda Code
+        run: |
+          BRANCH_NAME="${{ github.head_ref || github.ref_name }}"
+          SAFE_BRANCH_NAME=$(echo "$BRANCH_NAME" | tr '/' '-')
+          SHORT_SHA=$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)
+          TAG="${SAFE_BRANCH_NAME}-${SHORT_SHA}"
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          make ${MAKE_LAMBDA_UPDATE_TARGET} \
+            AWS_REGION=${{ vars.AWS_REGION }} \
+            PROJECT=${{ env.PROJECT }} \
+            ENV=dev \
+            TAG=$TAG \
+            AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID \
+            ECR_REPO=${{ env.PROJECT }}-frontend-ssr-dev
+
+  # ---------------------------------------------------------------------------
+  # Step 5: Semantic Release (runs only on push/merge to main)
+  # ---------------------------------------------------------------------------
+  release:
+    name: Semantic Release
+    needs: [build, docker, semgrep]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Step 6: Deploy to Staging (main only, after release)
+  # Performs environment-specific build and ECR push natively on ARM.
+  # ---------------------------------------------------------------------------
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [release, semgrep]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
+    environment: stg
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Restore node modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies fallback
+        run: pnpm install --frozen-lockfile --prefer-offline
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set Environment Variables
+        run: |
+          # Customize environment variables for staging:
+          # echo "VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}" >> $GITHUB_ENV
+          # echo "VITE_APP_ENV=${{ vars.VITE_APP_ENV || 'stg' }}" >> $GITHUB_ENV
+          echo "Staging environment variables configured"
+
+      - name: Build Application
+        run: pnpm build && pnpm build:lambda
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ${DOCKERFILE_PATH}
+          push: true
+          provenance: false
+          secrets: |
+            NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT }}-frontend-ssr:${{ needs.release.outputs.new_release_version }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT }}-frontend-ssr:latest
+          cache-from: type=gha,scope=frontend-ssr-stg
+          cache-to: type=gha,mode=max,scope=frontend-ssr-stg
+
+      - name: Deploy static assets to S3
+        run: |
+          S3_BUCKET=$(aws cloudformation list-exports --query "Exports[?Name=='${{ env.PROJECT }}-stg-${CFN_EXPORT_SUFFIX}'].Value" --output text)
+          if [ -z "$S3_BUCKET" ]; then
+            echo "Error: S3_BUCKET could not be resolved from CloudFormation exports"
+            exit 1
+          fi
+          make ${MAKE_S3_SYNC_TARGET} S3_BUCKET=$S3_BUCKET
+
+      - name: Update Lambda Code
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          make ${MAKE_LAMBDA_UPDATE_TARGET} \
+            AWS_REGION=${{ vars.AWS_REGION }} \
+            PROJECT=${{ env.PROJECT }} \
+            ENV=stg \
+            TAG=${{ needs.release.outputs.new_release_version }} \
+            AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID \
+            ECR_REPO=${{ env.PROJECT }}-frontend-ssr
+
+  # ---------------------------------------------------------------------------
+  # Step 7: Deploy to Production (main only, after deploy-staging)
+  # Uses GitHub environment protection rules for approval gate.
+  # Performs environment-specific build and ECR push natively on ARM.
+  # ---------------------------------------------------------------------------
+  deploy-prod:
+    name: Deploy to Production
+    needs: [release, deploy-staging, semgrep]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.release.outputs.new_release_published == 'true'
+    environment: prod
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "${NODE_VERSION}"
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+
+      - name: Restore node modules
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install dependencies fallback
+        run: pnpm install --frozen-lockfile --prefer-offline
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Set Environment Variables
+        run: |
+          # Customize environment variables for production:
+          # echo "VITE_API_BASE_URL=${{ vars.VITE_API_BASE_URL }}" >> $GITHUB_ENV
+          # echo "VITE_APP_ENV=${{ vars.VITE_APP_ENV || 'prod' }}" >> $GITHUB_ENV
+          echo "Production environment variables configured"
+
+      - name: Build Application
+        run: pnpm build && pnpm build:lambda
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          file: ${DOCKERFILE_PATH}
+          push: true
+          provenance: false
+          secrets: |
+            NODE_AUTH_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT }}-frontend-ssr:${{ needs.release.outputs.new_release_version }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.PROJECT }}-frontend-ssr:latest
+          cache-from: type=gha,scope=frontend-ssr-prod
+          cache-to: type=gha,mode=max,scope=frontend-ssr-prod
+
+      - name: Deploy static assets to S3
+        run: |
+          S3_BUCKET=$(aws cloudformation list-exports --query "Exports[?Name=='${{ env.PROJECT }}-prod-${CFN_EXPORT_SUFFIX}'].Value" --output text)
+          if [ -z "$S3_BUCKET" ]; then
+            echo "Error: S3_BUCKET could not be resolved from CloudFormation exports"
+            exit 1
+          fi
+          make ${MAKE_S3_SYNC_TARGET} S3_BUCKET=$S3_BUCKET
+
+      - name: Update Lambda Code
+        run: |
+          AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          make ${MAKE_LAMBDA_UPDATE_TARGET} \
+            AWS_REGION=${{ vars.AWS_REGION }} \
+            PROJECT=${{ env.PROJECT }} \
+            ENV=prod \
+            TAG=${{ needs.release.outputs.new_release_version }} \
+            AWS_ACCOUNT_ID=$AWS_ACCOUNT_ID \
+            ECR_REPO=${{ env.PROJECT }}-frontend-ssr

@@ -1,0 +1,42 @@
+# ==============================================================================
+# Semgrep Custom Rules — Starter Configuration
+# ==============================================================================
+# This file defines custom Semgrep rules for your project. Semgrep will load
+# any file with a top-level `rules` key as a valid configuration.
+#
+# USAGE:
+#   # Run with this custom rules file:
+#   semgrep scan --config security/.semgrep/semgrep.yaml
+#
+#   # Combine with registry rulesets (passed via --config, not in this file):
+#   semgrep scan --config security/.semgrep/semgrep.yaml --config p/default
+#
+#   # Recommended registry rulesets to layer on top:
+#   #   --config p/default          (Semgrep's recommended starting point)
+#   #   --config p/owasp-top-ten    (OWASP Top 10 vulnerabilities)
+#   #   --config p/golang           (Go-specific rules)
+#   #   --config p/typescript       (TypeScript-specific rules)
+#   #   --config p/python           (Python-specific rules)
+# ==============================================================================
+
+rules:
+  # ---- Example Custom Rule ----
+  # Uncomment and modify this template to add project-specific rules.
+  #
+  # - id: example-hardcoded-secret
+  #   patterns:
+  #     - pattern: $VAR = "..."
+  #     - metavariable-regex:
+  #         metavariable: $VAR
+  #         regex: (?i)(secret|token|password|api_key)
+  #   message: >-
+  #     Potential hardcoded secret in variable '$VAR'.
+  #     Store credentials in environment variables or a secrets manager.
+  #   languages:
+  #     - go
+  #     - python
+  #     - typescript
+  #   severity: ERROR
+
+  # Add your custom rules below:
+  []
