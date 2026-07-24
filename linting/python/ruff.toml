@@ -1,0 +1,101 @@
+# ==============================================================================
+# Production-Ready Ruff Linter & Formatter Configuration
+# Target Python Version: 3.12+
+# File Format: Standalone TOML (ruff.toml)
+# ==============================================================================
+
+# Target Python version for syntax upgrade checks and compatibility rules.
+target-version = "py312"
+
+# Maximum line length for code formatting and line-length linting rules (e.g., E501).
+line-length = 120
+
+# Number of spaces per indentation level.
+indent-width = 4
+
+# Directories and files to exclude from linting and formatting.
+exclude = [
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nobuild",
+    ".pytype",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "venv",
+]
+
+# ------------------------------------------------------------------------------
+# Linter Configuration
+# ------------------------------------------------------------------------------
+[lint]
+# Selected rule sets:
+# - E:   pycodestyle errors (standard Python style issues)
+# - F:   Pyflakes (syntax errors, unused imports, undefined variables)
+# - I:   isort (import sorting and structure standardization)
+# - N:   pep8-naming (naming conventions for functions, classes, variables)
+# - S:   flake8-bandit (security risk identification & static code security)
+# - B:   flake8-bugbear (common bug patterns & anti-patterns detection)
+# - A:   flake8-builtins (prevents overriding/shadowing Python built-in names)
+# - C4:  flake8-comprehensions (optimizes list, dict, and set comprehension usage)
+# - UP:  pyupgrade (enforces modern Python 3.12+ syntax constructs)
+# - RUF: Ruff-specific rules (performance improvements & native linter checks)
+select = [
+    "E",    # pycodestyle errors
+    "F",    # Pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "S",    # flake8-bandit (security checks)
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade (Python 3.12+ modernization)
+    "RUF",  # Ruff-native rules
+]
+
+# Additional rules to ignore globally (left empty for strict defaults).
+ignore = []
+
+# Allow autofix execution for all eligible rules when running `ruff check --fix`.
+fixable = ["ALL"]
+unfixable = []
+
+# ------------------------------------------------------------------------------
+# Per-File Rule Exemptions
+# ------------------------------------------------------------------------------
+[lint.per-file-ignores]
+# Relax strict security checks in test suites:
+# - S101: Allow standard 'assert' statements in unit/integration tests
+# - S106: Allow hardcoded passwords/tokens in test mocks and fixtures
+"**/test_*.py" = ["S101", "S106"]
+"**/tests/**"  = ["S101", "S106"]
+
+# ------------------------------------------------------------------------------
+# Import Sorting (isort) Settings
+# ------------------------------------------------------------------------------
+[lint.isort]
+# Combine multi-line import statements into single line where possible.
+combine-as-imports = true
+
+# Split multi-line imports on trailing commas for cleaner git diffs.
+split-on-trailing-comma = true
+
+# ------------------------------------------------------------------------------
+# Code Formatter Configuration
+# ------------------------------------------------------------------------------
+[format]
+# Enforce double quotes for string literals across the codebase.
+quote-style = "double"
+
+# Use spaces for indentation (matching indent-width = 4).
+indent-style = "space"
+
+# Preserve multi-line trailing commas to maintain clean diffs.
+skip-magic-trailing-comma = false
+
+# Automatically detect operating system line endings (LF / CRLF).
+line-ending = "auto"
