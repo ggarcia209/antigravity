@@ -1,20 +1,20 @@
 # Vibe Code Toolkit
 
-A production-grade toolkit for **agent-driven software development**. Provides the guardrails, quality checks, and deployment automation that turn AI code generation ("vibe coding") into secure, reliable, and maintainable software.
+A production-grade toolkit for **agent-driven software development**. Provides the guardrails, quality checks, and deployment automation that turn AI code generation into secure, reliable, and maintainable software.
 
 ## Overview
 
-Vibe coding — letting an AI agent generate code from natural-language prompts — is fast but unconstrained. Speed without structure leads to drift: inconsistent patterns, unvetted dependencies, silent vulnerabilities, and deployment gaps. This toolkit closes those gaps by wrapping every agent session in a set of **rules**, **scanners**, **linters**, and **pipelines** that enforce the same standards a senior engineering team would.
+Agentic software development (or vibe coding) is fast but unconstrained. Speed without structure leads to drift: inconsistent patterns, unvetted dependencies, silent vulnerabilities, and deployment gaps. This toolkit closes those gaps by wrapping every agent session in a set of **rules**, **scanners**, **linters**, and **pipelines** that enforce the same standards a senior engineering team would.
 
-The toolkit is designed to be cloned or synced into any repository, giving every project the same baseline from day one.
+The toolkit is intended to be forked and customized as needed. It is designed to be cloned or synced into any repository, giving every project the same baseline from day one.
 
-## Why Each Tool Matters
+## The Toolkit
 
 ### 1. Agent Configuration — Rules & Workflows
 
 **What it provides:** LLM agent rules and reusable workflows for Google Antigravity, with integrations for JIRA, GitHub, and Antigravity's native MCP Servers.
 
-**Why it matters for vibe coding:** AI agents operate within whatever constraints you give them. Without explicit rules, every session starts from zero — the agent makes different architectural choices, naming conventions, and error-handling decisions each time. Agent rules act as **institutional memory**: they encode your team's conventions, security posture, and design patterns so the agent produces code that reads like it was written by someone who's been on the team for years. Workflows extend this further by codifying multi-step processes (code review, retry logic, issue triage) so the agent follows the same playbook every time.
+**Purpose:** AI agents operate within whatever constraints you give them. Without explicit rules, every session starts from zero — the agent makes different architectural choices, naming conventions, and error-handling decisions each time. Agent rules act as **institutional memory**: they encode your team's conventions, security posture, and design patterns so the agent produces code that reads like it was written by someone who's been on the team for years. Workflows extend this further by codifying multi-step processes (code review, retry logic, issue triage) so the agent follows the same playbook every time.
 
 📁 [`rules/`](rules/) · [`workflows/`](workflows/)
 
@@ -22,7 +22,7 @@ The toolkit is designed to be cloned or synced into any repository, giving every
 
 **What it provides:** Trivy for dependency vulnerability scanning, container image auditing, IaC misconfiguration detection, and secret leak detection. Semgrep for pattern-based static analysis (SAST) that catches insecure code patterns.
 
-**Why it matters for vibe coding:** AI agents optimize for functionality, not security. They will happily use a library with a known CVE, hardcode a connection string, or write an SQL query without parameterization — because the prompt said "make it work," not "make it safe." Security scanning is the **automated second opinion** that catches what the agent won't. In every CI pipeline in this toolkit, Trivy and Semgrep run as **gate jobs** — if they fail, nothing else runs. This ensures that no AI-generated code reaches any environment without passing a security review, even when there's no human in the loop.
+**Purpose:** AI agents optimize for functionality, not security. They will happily use a library with a known CVE, hardcode a connection string, or write an SQL query without parameterization — because the prompt said "make it work," not "make it safe." Security scanning is the **automated second opinion** that catches what the agent won't. In every CI pipeline in this toolkit, Trivy and Semgrep run as **gate jobs** — if they fail, nothing else runs. This ensures that no AI-generated code reaches any environment without passing a security review, even when there's no human in the loop.
 
 📁 [`security/`](security/)
 
@@ -30,7 +30,7 @@ The toolkit is designed to be cloned or synced into any repository, giving every
 
 **What it provides:** Pre-configured linters and formatters: golangci-lint (Go), ESLint + Prettier (TypeScript/React), and Ruff (Python).
 
-**Why it matters for vibe coding:** Without linting, AI-generated code accumulates style drift across sessions — inconsistent imports, mixed formatting, unused variables, and subtle anti-patterns that compound into maintenance burden. Linters enforce **mechanical consistency**: the same rules apply whether the code was written by a human, an agent, or both. They also catch real bugs (shadowed variables, unchecked errors, unsafe type assertions) that agents tend to produce when optimizing for speed. By running linters in CI, every merge to `main` guarantees a codebase that any engineer — or agent — can read and extend without surprises.
+**Purpose:** Without linting, AI-generated code accumulates style drift across sessions — inconsistent imports, mixed formatting, unused variables, and subtle anti-patterns that compound into maintenance burden. Linters enforce **mechanical consistency**: the same rules apply whether the code was written by a human, an agent, or both. They also catch real bugs (shadowed variables, unchecked errors, unsafe type assertions) that agents tend to produce when optimizing for speed. By running linters in CI, every merge to `main` guarantees a codebase that any engineer — or agent — can read and extend without surprises.
 
 📁 [`linting/`](linting/)
 
@@ -38,7 +38,7 @@ The toolkit is designed to be cloned or synced into any repository, giving every
 
 **What it provides:** Four GitHub Actions workflow templates covering npm publish, Go Lambda, React SPA, and React SSR deployments — plus Dockerfile templates for containerized Lambda builds. All action versions are SHA-pinned, all pipelines include security gates, and all support multi-environment promotion (dev → staging → production).
 
-**Why it matters for vibe coding:** The last mile of vibe coding is deployment. An agent can generate a feature, but without a pipeline, that feature lives in a branch forever. These templates make deployment **automatic and safe**: every push triggers security scans, tests, builds, and staged rollouts. Docker templates ensure that the runtime environment is reproducible and minimal (multi-stage, non-root, SHA-pinned base images). The multi-environment promotion chain with manual approval gates on production means you can let agents ship to dev and staging autonomously while keeping a human checkpoint before production — the right balance between speed and control.
+**Purpose:** The last mile of shipping an application. An agent can generate a feature, but without a pipeline, that feature lives in a branch forever. These templates make deployment **automatic and safe**: every push triggers security scans, tests, builds, and staged rollouts. Docker templates ensure that the runtime environment is reproducible and minimal (multi-stage, non-root, SHA-pinned base images). The multi-environment promotion chain with manual approval gates on production means you can let agents ship to dev and staging autonomously while keeping a human checkpoint before production — the right balance between speed and control.
 
 📁 [`ci-cd/`](ci-cd/) · [`docker/`](docker/)
 
@@ -320,7 +320,6 @@ GitHub Actions workflow templates are in the `/ci-cd/` directory. See [`ci-cd/RE
 1. Copy the desired template into `.github/workflows/`
 2. Replace `${PLACEHOLDER}` values with your project-specific values
 3. Configure AWS OIDC and GitHub Actions secrets
-4. Commit and push
 
 ## TODO:
 
