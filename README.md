@@ -300,6 +300,29 @@ semgrep scan --config security/.semgrep/semgrep.yaml --config p/default
 
 📖 [Semgrep Documentation](https://semgrep.dev/docs/)
 
+### npm Supply-Chain Hardening — `.npmrc.example`
+
+**Config**: [`.npmrc.example`](.npmrc.example)
+
+A hardened `.npmrc` template that mitigates common npm supply-chain attack vectors. Copy it to `.npmrc` in your project root and fill in the placeholders.
+
+```bash
+cp .npmrc.example .npmrc
+# Then replace ${YOUR_GITHUB_USERNAME} and ${YOUR_GITHUB_PROJECT}
+```
+
+**What each setting does:**
+
+| Setting | Purpose |
+|---|---|
+| `@scope:registry` + `_authToken` | Authenticates with GitHub Packages for private package installs. The token is read from `NODE_AUTH_TOKEN` (set via `.env` or CI secrets), keeping credentials out of the file. |
+| `minimum-release-age=2880` | Refuses to install any package version published less than 48 hours ago. This provides a window for the community and npm security team to flag compromised releases before they reach your project. |
+| `minimum-release-age-exclude` | Exempts your own scoped packages from the release age gate, so you can install and test your own packages immediately after publishing. |
+| `verify-store-integrity=true` | Validates the SHA-512 integrity hash of every installed package against the registry manifest, catching corrupted or tampered tarballs. |
+| `never-run-scripts=true` | Blocks `postinstall`, `preinstall`, and other lifecycle scripts from executing during `pnpm install`. This is the single most effective defense against packages that run malicious code on install. Legitimate postinstall scripts (e.g., `esbuild` binary downloads) can be run manually. |
+
+> **Note**: `never-run-scripts` may require you to manually run build scripts for packages that compile native binaries. See [pnpm docs — `never-run-scripts`](https://pnpm.io/npmrc#never-run-scripts) for details.
+
 ---
 
 ## CI/CD Templates
