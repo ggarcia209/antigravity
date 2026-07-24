@@ -1,0 +1,15 @@
+scan:
+  skip-dirs:
+    - .git
+    - node_modules
+    - dist
+    - out
+  skip-files:
+    - .env
+    - "**/.env"
+severity:
+  - HIGH
+  - CRITICAL
+exit-code: 1
+pkg:
+  include-dev-deps: true
