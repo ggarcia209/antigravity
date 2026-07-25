@@ -86,8 +86,8 @@ export class GitSyncer implements Syncer {
     try {
       // Determine URLs to try: if it matches the default SSH url, try SSH first and then HTTPS
       const urlsToTry: string[] = [repoUrl];
-      if (repoUrl === 'git@github.com:ggarcia209/antigravity.git') {
-        urlsToTry.push('https://github.com/ggarcia209/antigravity.git');
+      if (repoUrl === 'git@github.com:ggarcia209/vibe-code-toolkit.git') {
+        urlsToTry.push('https://github.com/ggarcia209/vibe-code-toolkit.git');
       }
 
       let cloned = false;
