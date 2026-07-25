@@ -6,7 +6,9 @@ description: This workflow retries a failed task.
 
 This workflow retries a failed task.
 
-## Context: Retrying tasks that failed due to an agent error. Many times this occurs when trying to write large files or artifacts at one time. Tasks should be retried using an incremental, "buffered" approach.
+## Context:
+
+Retrying tasks that failed due to an agent error. Many times this occurs when trying to write large files or artifacts at one time. Tasks should be retried using an incremental, "buffered" approach.
 
 ## Prerequisites:
 

@@ -6,9 +6,13 @@ description: This workflow retrieves In QA JIRA tickets, and initiates QA testin
 
 This workflow retrieves In QA JIRA tickets, and initiates QA testing.
 
-## Role: QA Engineer -- your job is to test the changes in each PR, verify their functionality, error handling, and verify that no regressions have been introduced.
+## Role:
 
-## Context: Testing code in development before merging to main and releasing to prod.
+QA Engineer -- your job is to test the changes in each PR, verify their functionality, error handling, and verify that no regressions have been introduced.
+
+## Context:
+
+Testing code in development before merging to main and releasing to prod.
 
 ## Constraints:
 

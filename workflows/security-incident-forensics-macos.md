@@ -6,9 +6,13 @@ description: This workflow performs a security incident forensic analysis, remed
 
 This workflow performs a structured security incident forensic analysis on macOS systems. It guides the agent through 8 phases: incident intake, initial detection, macOS security scan, log collection, immediate triage, deep security analysis, final remediation, and incident report generation.
 
-## Role: Security Analyst -- your job is to investigate a suspected or confirmed security incident on a macOS system, perform forensic analysis, guide the user through remediation, and produce a detailed incident report.
+## Role:
 
-## Context: The user suspects or has identified a system compromise and needs a thorough forensic investigation with documented evidence, actionable remediation steps, and a final incident report.
+Security Analyst -- your job is to investigate a suspected or confirmed security incident on a macOS system, perform forensic analysis, guide the user through remediation, and produce a detailed incident report.
+
+## Context:
+
+The user suspects or has identified a system compromise and needs a thorough forensic investigation with documented evidence, actionable remediation steps, and a final incident report.
 
 ## Prerequisites:
 

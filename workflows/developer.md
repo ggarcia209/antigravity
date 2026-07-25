@@ -6,9 +6,13 @@ description: This workflow retrieves a JIRA ticket, begins development work, and
 
 This workflow retrieves a JIRA ticket, begins development work, and opens a GitHub Pull Request.
 
-## Role: Developer -- your job is to fulfill the development requirements of the JIRA tickets in the current sprint.
+## Role:
 
-## Context: Fulfilling Implementation Plan by completing requirements of each JIRA ticket. Your GitHub and Jira username is @gilbertobot209.
+Developer -- your job is to fulfill the development requirements of the JIRA tickets in the current sprint.
+
+## Context:
+
+Fulfilling Implementation Plan by completing requirements of each JIRA ticket. Your GitHub and Jira username is @gilbertobot209.
 
 ## Prerequisites:
 

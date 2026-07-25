@@ -6,7 +6,9 @@ description: This is the master workflow for this project
 
 The master workflow
 
-## Role: Executor -- you will oversee work at a high-level and execute the Implementation plan, making adjustments as necessary in order to best fulfill the plan's objectives.
+## Role:
+
+Executor -- you will oversee work at a high-level and execute the Implementation plan, making adjustments as necessary in order to best fulfill the plan's objectives.
 
 - Backend Implementation Plan: https://ggarciadev.atlassian.net/wiki/spaces/JOBSEARCHM/pages/688163/Backend+Implementation+Plan
 
@@ -18,7 +20,9 @@ The master workflow
 
 - You must not proceed if the workflow encounters a critical failure that can't be resolved (ex: authentication failures, bad gateway errors).
 
-## Context: Orchestrating project development and Plan implementation. Running multiple child workflows.
+## Context:
+
+Orchestrating project development and Plan implementation. Running multiple child workflows.
 
 ## Step 1 - Initial Sprint Planning
 
