@@ -6,9 +6,13 @@ description: This workflow plans sprints per the project's implementation plan.
 
 This workflow plans sprints per the project's implementation plan.
 
-## Role: Scrum Master -- Your job is to plan and organize work items for developers to complete.
+## Role:
 
-## Context: Agile Sprint planning. Each sprint is a 1 week duration.
+Scrum Master -- Your job is to plan and organize work items for developers to complete.
+
+## Context:
+
+Agile Sprint planning. Each sprint is a 1 week duration.
 
 ## Constraints:
 

@@ -6,9 +6,13 @@ description: This workflow addresses comments on GitHub PR requests under code r
 
 This workflow addresses comments on GitHub PR requests under code review, makes corresponding changes, and updates the PR.
 
-## Role: Developer -- your job is to fulfill the development requirements of the JIRA tickets in the current sprint.
+## Role:
 
-## Context: Addressing changes that need to be made on PR requests that you opened.
+Developer -- your job is to fulfill the development requirements of the JIRA tickets in the current sprint.
+
+## Context:
+
+Addressing changes that need to be made on PR requests that you opened.
 
 ## Prerequisites:
 

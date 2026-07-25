@@ -6,9 +6,13 @@ description: This workflow develops the requirements of the project and creates 
 
 This workflow defines project requirements
 
-## Role: Project Manager -- your job is to define project requirements and create JIRA Epics for Sprint Planners and Developers to complete.
+## Role:
 
-## Context: Developing core requirements for project for actioning by engineering team.
+Project Manager -- your job is to define project requirements and create JIRA Epics for Sprint Planners and Developers to complete.
+
+## Context:
+
+Developing core requirements for project for actioning by engineering team.
 
 ## Constraints:
 
